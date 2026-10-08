@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import load_previous  # Disponibiliza os módulos das etapas anteriores.
+import load_previous # Disponibiliza os módulos das etapas anteriores.
 
 import argparse
 from pathlib import Path
@@ -8,7 +8,7 @@ from pathlib import Path
 from Lexer import Lexer, LexerError
 from cfg import format_cfg
 from cfg_builder import CFGBuilder
-from name_resolver import resolve_names
+from name_resolver import NameResolver
 from parser import Parser, ParserError
 from semantic import SemanticAnalyzer
 from semantic_errors import SemanticError
@@ -35,7 +35,7 @@ def main(argv: list[str] | None = None) -> int:
         source = args.source.read_text(encoding="utf-8")
         program = Parser(Lexer(source).scan()).parse()
         if args.cfg_only:
-            resolve_names(program)
+            NameResolver(program)
             check_types(program)
             for function in program.functions:
                 print(format_cfg(CFGBuilder().build(function)))

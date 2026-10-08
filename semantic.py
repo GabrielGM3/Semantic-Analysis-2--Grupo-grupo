@@ -1,18 +1,21 @@
-from __future__ import annotations
-
-import load_previous  # Disponibiliza os módulos das etapas anteriores.
-
-from ast_nodes import Program
-from flow_analysis import check_flow
-from name_resolver import resolve_names
-from type_checker import check_types
-
+from name_resolver import NameResolver
+from type_checker import TypeChecker
+from semantic_errors import SemanticError
 
 class SemanticAnalyzer:
-    """Nomes → tipos → fluxo. Uma passagem com erros impede as seguintes."""
+    def analyze(self, program):
+        #Resolução de Nomes
+        resolver = NameResolver()
+        resolver.visit(program)
 
-    def analyze(self, program: Program) -> Program:
-        resolve_names(program)
-        check_types(program)
-        check_flow(program)
+        if resolver.diagnostics:
+            raise SemanticError(diagnostics=tuple(resolver.diagnostics))
+
+        #Verificação de Tipos
+        checker = TypeChecker()
+        checker.visit(program)
+
+        if checker.diagnostics:
+            raise SemanticError(diagnostics=tuple(checker.diagnostics))
+
         return program
