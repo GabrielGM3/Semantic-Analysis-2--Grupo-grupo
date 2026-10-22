@@ -14,7 +14,7 @@ from __future__ import annotations
 import load_previous  # Disponibiliza os módulos das etapas anteriores.
 
 from ast_nodes import Block, FunctionDecl, IfStmt, Stmt, WhileStmt, ReturnStmt
-from cfg import BlockId, CFG, Jump, Branch, Return
+from cfg import BlockId, CFG, Jump, Branch, Return, ScopeExit
 
 
 class CFGBuilder:
@@ -38,26 +38,36 @@ class CFGBuilder:
             if current is None:
                 break
             current = self._build_statement(stmt, current)
+            
+        # Registra a saída de escopo caso o fluxo normal alcance o fim do bloco
+        if current is not None:
+            scope = block.metadata.get("scope")
+            if scope is not None:
+                self.cfg.blocks[current].operations.append(ScopeExit(scope))
+                
         return current
 
     def _build_statement(self, statement: Stmt, current: BlockId) -> BlockId | None:
-        """TODO: incorpore um comando ao CFG e devolva sua continuação normal."""
+        """Incorpore um comando ao CFG e devolva sua continuação normal."""
         if isinstance(statement, IfStmt):
             return self._build_if(statement, current)
         elif isinstance(statement, WhileStmt):
             return self._build_while(statement, current)
         elif isinstance(statement, ReturnStmt):
-            self.cfg.terminate(current, Return(statement=statement))
+            # O destino de um retorno é sempre a saída return_exit da função
+            self.cfg.terminate(current, Return(statement, self.cfg.return_exit))
             return None
         else:
             self.cfg.blocks[current].operations.append(statement)
             return current
 
     def _build_if(self, statement: IfStmt, current: BlockId) -> BlockId | None:
-        """TODO: construa o fluxo da condicional e devolva sua continuação."""
-
+        """Construa o fluxo da condicional e devolva sua continuação."""
         then_block = self.cfg.new_block()
         merge_block = self.cfg.new_block()
+        
+        reached_merge = False
+
         if statement.else_block is not None:
             else_block = self.cfg.new_block()
             self.cfg.terminate(current, Branch(statement.condition, then_block.id, else_block.id))
@@ -65,33 +75,50 @@ class CFGBuilder:
             then_cont = self._build_block(statement.then_block, then_block.id)
             if then_cont is not None:
                 self.cfg.terminate(then_cont, Jump(merge_block.id))
+                reached_merge = True
 
             else_cont = self._build_block(statement.else_block, else_block.id)
             if else_cont is not None:
                 self.cfg.terminate(else_cont, Jump(merge_block.id))
+                reached_merge = True
 
         else:
             self.cfg.terminate(current, Branch(statement.condition, then_block.id, merge_block.id))
+            reached_merge = True
 
             then_cont = self._build_block(statement.then_block, then_block.id)
             if then_cont is not None:
                 self.cfg.terminate(then_cont, Jump(merge_block.id))
 
-        return merge_block.id
+        # Se nenhum ramo alcançar o merge_block (ex: ambos têm return), não há continuação
+        return merge_block.id if reached_merge else None
 
 
     def _build_while(self, statement: WhileStmt, current: BlockId) -> BlockId | None:
-        """TODO: construa o fluxo do laço e devolva sua continuação."""
-
+        """Construa o fluxo do laço e devolva sua continuação."""
         header_block = self.cfg.new_block()
         body_block = self.cfg.new_block()
         after_block = self.cfg.new_block()
 
         self.cfg.terminate(current, Jump(header_block.id))
-        self.cfg.terminate(header_block.id, Branch(statement.condition, body_block.id, after_block.id))
+        
+        #verifica se é um laço infinito explícito "while (true)"
+        is_infinite_loop = (
+            type(statement.condition).__name__ == "BoolExpr" and 
+            getattr(statement.condition, "value", False) is True
+        ) or (
+            type(statement.condition).__name__ == "LiteralExpr" and 
+            getattr(statement.condition, "value", False) is True
+        )
+        
+        if is_infinite_loop:
+            #sem saída normal para o after_block
+            self.cfg.terminate(header_block.id, Branch(statement.condition, body_block.id, self.cfg.fallthrough_exit))
+        else:
+            self.cfg.terminate(header_block.id, Branch(statement.condition, body_block.id, after_block.id))
 
         body_cont = self._build_block(statement.body, body_block.id)
         if body_cont is not None:
             self.cfg.terminate(body_cont, Jump(header_block.id))
 
-        return after_block.id
+        return None if is_infinite_loop else after_block.id
