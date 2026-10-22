@@ -1,21 +1,19 @@
-from name_resolver import NameResolver
-from type_checker import TypeChecker
-from semantic_errors import SemanticError
+from __future__ import annotations
+
+import load_previous
+
+from name_resolver import resolve_names
+from type_checker import check_types
+from flow_analysis import check_flow
+
 
 class SemanticAnalyzer:
     def analyze(self, program):
-        #Resolução de Nomes
-        resolver = NameResolver()
-        resolver.visit(program)
-
-        if resolver.diagnostics:
-            raise SemanticError(diagnostics=tuple(resolver.diagnostics))
-
-        #Verificação de Tipos
-        checker = TypeChecker()
-        checker.visit(program)
-
-        if checker.diagnostics:
-            raise SemanticError(diagnostics=tuple(checker.diagnostics))
-
+        resolve_names(program)
+        check_types(program)
+        check_flow(program)
         return program
+
+
+def analyze_semantics(program):
+    return SemanticAnalyzer().analyze(program)

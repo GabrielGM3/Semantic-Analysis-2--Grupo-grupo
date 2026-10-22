@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from ast_nodes import Program, TypeName
-from semantic_errors import SemanticDiagnostic, SemanticErrorKind
+from semantic_errors import SemanticDiagnostic, SemanticErrorKind, SemanticError
 
 
 class TypeUnknown:
@@ -374,8 +374,6 @@ def check_types(program: Program) -> None:
     checker = TypeChecker()
     checker.visit(program)
 
-    # Acumulando os diagnósticos no nó program (caso a arquitetura do compilador os colete dali)
-    if not hasattr(program, "diagnostics"):
-        program.diagnostics = []
 
-    program.diagnostics.extend(checker.diagnostics)
+    if checker.diagnostics:
+        raise SemanticError(tuple(checker.diagnostics))

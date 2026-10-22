@@ -54,9 +54,12 @@ class CFGBuilder:
         elif isinstance(statement, WhileStmt):
             return self._build_while(statement, current)
         elif isinstance(statement, ReturnStmt):
-            # O destino de um retorno é sempre a saída return_exit da função
-            self.cfg.terminate(current, Return(statement, self.cfg.return_exit))
+
+            self.cfg.terminate(current, Return(statement))
             return None
+        elif isinstance(statement, Block):
+
+            return self._build_block(statement, current)
         else:
             self.cfg.blocks[current].operations.append(statement)
             return current
@@ -90,35 +93,36 @@ class CFGBuilder:
             if then_cont is not None:
                 self.cfg.terminate(then_cont, Jump(merge_block.id))
 
-        # Se nenhum ramo alcançar o merge_block (ex: ambos têm return), não há continuação
-        return merge_block.id if reached_merge else None
 
+        return merge_block.id if reached_merge else None
 
     def _build_while(self, statement: WhileStmt, current: BlockId) -> BlockId | None:
         """Construa o fluxo do laço e devolva sua continuação."""
         header_block = self.cfg.new_block()
         body_block = self.cfg.new_block()
-        after_block = self.cfg.new_block()
 
         self.cfg.terminate(current, Jump(header_block.id))
-        
-        #verifica se é um laço infinito explícito "while (true)"
+
+
+        cond = statement.condition
         is_infinite_loop = (
-            type(statement.condition).__name__ == "BoolExpr" and 
-            getattr(statement.condition, "value", False) is True
-        ) or (
-            type(statement.condition).__name__ == "LiteralExpr" and 
-            getattr(statement.condition, "value", False) is True
+                getattr(cond, "value", None) is True
+                or getattr(cond, "literal", None) is True
+                or (type(cond).__name__ in ("BoolLiteral", "BooleanLiteral", "BoolExpr", "LiteralExpr") and getattr(
+            cond, "lexeme", "") == "true")
         )
-        
+
         if is_infinite_loop:
-            #sem saída normal para o after_block
-            self.cfg.terminate(header_block.id, Branch(statement.condition, body_block.id, self.cfg.fallthrough_exit))
+            
+            self.cfg.terminate(header_block.id, Branch(statement.condition, body_block.id, body_block.id))
+            continuation = None
         else:
+            after_block = self.cfg.new_block()
             self.cfg.terminate(header_block.id, Branch(statement.condition, body_block.id, after_block.id))
+            continuation = after_block.id
 
         body_cont = self._build_block(statement.body, body_block.id)
         if body_cont is not None:
             self.cfg.terminate(body_cont, Jump(header_block.id))
 
-        return None if is_infinite_loop else after_block.id
+        return continuation

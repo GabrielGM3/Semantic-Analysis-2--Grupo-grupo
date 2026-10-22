@@ -1,4 +1,4 @@
-from semantic_errors import SemanticDiagnostic, SemanticErrorKind
+from semantic_errors import SemanticDiagnostic, SemanticErrorKind,SemanticError
 from ast_nodes import TypeName
 import symbols
 
@@ -13,7 +13,8 @@ def to_typename(t):
     return t
 
 class NameResolver:
-    def __init__(self):
+    def __init__(self,program):
+        self.program = program
         self.diagnostics = []
         self.global_functions = {}
         self.current_scope = None
@@ -163,3 +164,15 @@ class NameResolver:
             self.add_error("UNDECLARED_FUNCTION", node)
         for arg in getattr(node, "args", getattr(node, "arguments", [])):
             self.visit(arg)
+
+def resolve_names(program):
+
+
+
+    resolver = NameResolver(program)
+    resolver.visit(program)
+
+    if resolver.diagnostics:
+        raise SemanticError(diagnostics=tuple(resolver.diagnostics))
+
+    return program
